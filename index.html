@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            .side{
+                display: flex;
+                flex-direction: column;
+                flex-wrap: wrap;
+                align-content: center;
+                padding: 5px;
+                position: absolute;
+                top: 0px;
+                left: 0px;
+                margin: 0px;
+                background-image: linear-gradient(0deg, #162E6A 0%, #4C629A 100%);
+                width: 180px;
+                height: 100%;
+                color: #FFFFFF;
+                font-weight: 900;
+            }
+            .content {
+                display: block;
+                position: absolute;
+                top: 0px;
+                right: 0px;
+                margin: 0px;
+                background-color: #FFFFFF;
+                width: calc(100% - 200px);
+                height: 100%;
+            }
+            .nav{
+                width: calc(100% - 24px);
+                height: 30px;
+                background-color: #4C629A;
+                border-color: #162E6A;
+                border-style: solid;
+                border-width: 2px;
+                border-radius: 5px;
+                margin: 5px;
+            }
+            .selected, button:hover {
+                border-color: #FFFFFF;
+                color: #FFFFFF;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="side">
+            <button class="nav">Test</button>
+            <button class="nav">other button</button>
+            <button class="nav">Yet more buttons</button>
+            <button class="nav">isdfisdf</button>
+        </div>
+        <div class="content">
+            <span id="demo"></span>
+            <span id="counter">0</span>
+            <br>
+            <button>Test</button>
+            <br>
+            <button>other button</button>
+            <br>
+            <button>Yet more buttons</button>
+            <br>
+            <button>isdfisdf</button>
+        </div>
+        <script>
+
+            var isLooping = false
+            const holdDelay = 300
+            const clickDelay = 100
+            var selectedButton = 0
+            var buttons = []
+            var buttonActions = [null,null,null,null,null,null,null,null,null,null,null,null,-90,90,180,0]
+            var buttonCount = 0
+            const angleAcceptance = 10
+            const nullArea = 0.4
+
+            findButtons()
+
+            if ('getGamepads' in navigator) {
+                window.addEventListener('gamepadconnected', (event) => {
+                    connectedGamepad =  event.gamepad.index;
+                    //click stores the unix times of when buttons or axes are last used for calculating actions when held
+                    //the axes are represented by the last two indices
+                    click = []
+                    for (i=0;i<=17;i++){
+                        click.push(0)
+                    }
+                    startLoop()
+                })
+            }
+            
+            function startLoop(){
+                if (isLooping){
+                    console.log("Already looping")
+                    return
+                }
+                console.log("Starting Loop")
+                isLooping = true
+                loop()
+                setInterval(loop,clickDelay)
+            }
+
+            function loop() {
+                gameKeys = navigator.getGamepads()[connectedGamepad].buttons
+                buttons[selectedButton].classList.remove("selected")
+                for (n=0;n<=15;n++){
+                    if (gameKeys[n].pressed&&(click[n]+holdDelay<Date.now() )){
+                        click[n] = Date.now()
+                        if (buttonActions[n] == null){
+                            //console.log("no direction bound to gamepad key")
+                        } else {
+                            console.log("index:")
+                            console.log(n)
+                            currentx = getCoordinates(buttons[selectedButton]).centerx
+                            currenty = getCoordinates(buttons[selectedButton]).centery
+                            attempt = findClosestButtonIndex(currentx,currenty,buttonActions[n])
+                            if (!(attempt==null)){
+                                selectedButton = attempt
+                            }
+                        }
+                    }
+                    if (!gameKeys[n].pressed){
+                        click[n]=0
+                    }
+                }
+                gameAxes = navigator.getGamepads()[connectedGamepad].axes
+                attempt = null
+                //left joystick
+                if(Math.hypot(Math.abs(gameAxes[0]),Math.abs(gameAxes[1]))>=nullArea&&(click[16]+holdDelay<Date.now())){
+                    angle = getDirectionFromAxes(gameAxes[0],gameAxes[1])
+                    currentx = getCoordinates(buttons[selectedButton]).centerx
+                    currenty = getCoordinates(buttons[selectedButton]).centery
+                    attempt = findClosestButtonIndex(currentx,currenty,angle)
+                    document.getElementById("demo").innerHTML = angle
+                    click[16] = Date.now()
+                }
+                if (!(attempt==null)){
+                    selectedButton = attempt
+                }
+                if (Math.hypot(Math.abs(gameAxes[0]),Math.abs(gameAxes[1]))<nullArea){
+                    click[16]=0
+                }
+                attempt = null
+                //right joystick
+                if(Math.hypot(Math.abs(gameAxes[2]),Math.abs(gameAxes[3]))>=nullArea&&(click[17]+holdDelay<Date.now())){
+                    angle = getDirectionFromAxes(gameAxes[2],gameAxes[3])
+                    currentx = getCoordinates(buttons[selectedButton]).centerx
+                    currenty = getCoordinates(buttons[selectedButton]).centery
+                    attempt = findClosestButtonIndex(currentx,currenty,angle)
+                    document.getElementById("demo").innerHTML = angle
+                    click[17] = Date.now()
+                }
+                if (!(attempt==null)){
+                    selectedButton = attempt
+                }
+                if (Math.hypot(Math.abs(gameAxes[2]),Math.abs(gameAxes[3]))<nullArea){
+                    click[17]=0
+                }
+
+
+                //handle the newly selected button
+                document.getElementById("counter").innerHTML = selectedButton;
+                buttons[selectedButton].classList.add("selected")
+            }
+
+            function findButtons(){
+                buttons = document.getElementsByTagName("button")
+                buttonCount = buttons.length
+            }
+
+            function findClosestButtonIndex(x,y,deg){
+                findButtons()
+                minDistance = Infinity
+                closest = null
+                for (i of buttons){
+                    let indexOfI = arrayObjectIndexOf(buttons, i)
+                    if (indexOfI!=selectedButton){
+                        let xChange = getCoordinates(i).centerx - x
+                        let yChange = getCoordinates(i).centery - y
+                        let distance = Math.abs(Math.hypot(xChange,yChange))
+                        let angle = radToDeg(Math.asin(yChange/distance))
+                        console.log(distance)
+                        if ((distance < minDistance)&&(within(angle,deg - angleAcceptance,deg + angleAcceptance))){
+                            minDistance = distance
+                            closest = indexOfI
+                        } else {
+                            console.log("angle did not match")
+                            console.log(angle)
+                        }
+                    }
+                }
+                return closest
+            }
+
+            function arrayObjectIndexOf(myArray, searchTerm) {
+                for(var i = 0, len = myArray.length; i < len; i++) {
+                    if (myArray[i] == searchTerm) return i;
+                }
+                return -1;
+            }
+
+            function within(x,a,b){
+                return (x >= a)&&(x <=b)
+            }
+
+            function getCoordinates(elem) {
+                let box = elem.getBoundingClientRect();
+
+                return {
+                    top: box.top + window.pageYOffset,
+                    right: box.right + window.pageXOffset,
+                    bottom: box.bottom + window.pageYOffset,
+                    left: box.left + window.pageXOffset,
+                    centerx: ((box.left + window.pageXOffset) + (box.right +window.pageXOffset))/2,
+                    centery: ((box.top + window.pageXOffset) + (box.bottom +window.pageXOffset))/2
+                };
+            }
+
+            function radToDeg(x){
+                return x * (180 / Math.PI)
+            }
+
+            function degToRad(x){
+                return x * (Math.PI / 180)
+            }
+
+            function getDirectionFromAxes(x,y){
+                // Handle edge cases where x or y is 0
+                if (x === 0 && y === 0) {
+                    return 0;
+                } else if (x === 0) {
+                    return y > 0 ? 90 : -90;
+                } else if (y === 0) {
+                    return x > 0 ? 0 : 180;
+                }
+
+                // Calculate the angle using the arctangent function (atan2)
+                // atan2 considers both x and y values to determine the quadrant
+                let angle = radToDeg(Math.atan2(y, x));
+
+                return angle;
+            }
+        </script>
+    </body>
+</html>
